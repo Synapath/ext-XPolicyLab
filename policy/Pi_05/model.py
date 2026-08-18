@@ -3,10 +3,9 @@
 """
 #!/usr/bin/python3
 """
+import hashlib
 from pathlib import Path
-import os
-import sys
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 
@@ -25,6 +24,30 @@ from XPolicyLab.utils.process_data import (
 
 _POLICY_DIR = Path(__file__).resolve().parent
 _CHECKPOINTS_DIR = _POLICY_DIR / "checkpoints"
+CameraMode = Literal["head_only", "three_view"]
+_CAMERAS_BY_MODE: dict[CameraMode, tuple[str, ...]] = {
+    "head_only": ("cam_high",),
+    "three_view": ("cam_high", "cam_left_wrist", "cam_right_wrist"),
+}
+
+
+def _validate_camera_mode(value: str) -> CameraMode:
+    if value not in _CAMERAS_BY_MODE:
+        raise ValueError(f"camera_mode must be one of {tuple(_CAMERAS_BY_MODE)}, got {value!r}")
+    return value
+
+
+def _paired_noise_seed(inference_seed: int, case_meta: dict[str, Any], action_type: str, _env_idx: int) -> int:
+    """Derive camera-condition-independent diffusion noise for one formal case."""
+    identity = "|".join(
+        (
+            str(inference_seed),
+            str(case_meta.get("task_name", "")),
+            str(case_meta.get("seed", "")),
+            str(case_meta.get("action_type", action_type)),
+        )
+    )
+    return int.from_bytes(hashlib.sha256(identity.encode("utf-8")).digest()[:8], "big")
 
 
 def _extract_step_number(value: Any) -> int | None:
@@ -95,9 +118,16 @@ class Model(ModelTemplate):
         )
         self.observation_window: dict[str, Any] | None = None
         self._latest_env_idx_list: list[int] = [0]
+        self.camera_mode = _validate_camera_mode(model_cfg.get("camera_mode", "three_view"))
+        self.paired_inference_noise = bool(model_cfg.get("paired_inference_noise", False))
+        self.inference_seed = int(model_cfg.get("inference_seed", 0))
+        self._case_meta: dict[str, Any] = {}
+        self._noise_rngs: dict[int, np.random.Generator] = {}
 
         self.policy = self.get_model(model_cfg=model_cfg)
         self.model = self.policy
+        self._action_horizon = int(self.policy._model.action_horizon)
+        self._action_dim = int(self.policy._model.action_dim)
 
     def get_model(self, model_cfg: dict[str, Any]):
         train_config_name = model_cfg.get("train_config_name", "pi05_aloha")
@@ -117,7 +147,8 @@ class Model(ModelTemplate):
     def update_obs_batch(self, obs_list):
         self._latest_env_idx_list = [obs.get("env_idx", index) for index, obs in enumerate(obs_list)]
         encoded_obs_list = [
-            encode_obs(obs, self.action_type, self.robot_action_dim_info) for obs in obs_list
+            encode_obs(obs, self.action_type, self.robot_action_dim_info, camera_mode=self.camera_mode)
+            for obs in obs_list
         ]
         self.observation_window = stack_obs(encoded_obs_list)
 
@@ -135,7 +166,10 @@ class Model(ModelTemplate):
 
         for batch_index, _ in enumerate(env_idx_list):
             single_observation = slice_stacked_obs(self.observation_window, batch_index)
-            actions = self.policy.infer(single_observation, **kwargs)["actions"]
+            infer_kwargs = dict(kwargs)
+            if self.paired_inference_noise and "noise" not in infer_kwargs:
+                infer_kwargs["noise"] = self._next_noise(int(env_idx_list[batch_index]))
+            actions = self.policy.infer(single_observation, **infer_kwargs)["actions"]
             if self.robot_action_dim_info is None:
                 action_list.append(actions)
             else:
@@ -154,17 +188,35 @@ class Model(ModelTemplate):
         self.observation_window = None
         self._latest_env_idx_list = [0]
 
+    def prepare_case(self, case_meta=None):
+        self._case_meta = dict(case_meta or {})
+        self._noise_rngs = {}
+        return {
+            "camera_mode": self.camera_mode,
+            "paired_inference_noise": self.paired_inference_noise,
+            "inference_seed": self.inference_seed,
+        }
+
+    def _next_noise(self, env_idx: int) -> np.ndarray:
+        if env_idx not in self._noise_rngs:
+            seed = _paired_noise_seed(self.inference_seed, self._case_meta, self.action_type, env_idx)
+            self._noise_rngs[env_idx] = np.random.default_rng(seed)
+        return self._noise_rngs[env_idx].standard_normal(
+            (self._action_horizon, self._action_dim),
+            dtype=np.float32,
+        )
+
     def reset_obsrvationwindows(self):
         self.reset()
 
 
-def encode_obs(observation, action_type, robot_action_dim_info):
+def encode_obs(observation, action_type, robot_action_dim_info, camera_mode: CameraMode = "three_view"):
+    camera_mode = _validate_camera_mode(camera_mode)
     if "images" in observation and "state" in observation:
         state = np.asarray(observation["state"], dtype=np.float32)
         images = {
-            "cam_high": ensure_chw_uint8(observation["images"]["cam_high"]),
-            "cam_left_wrist": ensure_chw_uint8(observation["images"]["cam_left_wrist"]),
-            "cam_right_wrist": ensure_chw_uint8(observation["images"]["cam_right_wrist"]),
+            camera_name: ensure_chw_uint8(observation["images"][camera_name])
+            for camera_name in _CAMERAS_BY_MODE[camera_mode]
         }
         prompt = observation.get("instruction")
         return {"state": state, "images": images, "prompt": prompt}
@@ -172,14 +224,14 @@ def encode_obs(observation, action_type, robot_action_dim_info):
     if robot_action_dim_info is None:
         raise ValueError("env_cfg_type is required when encoding raw environment observations.")
 
+    candidates = {
+        "cam_high": ["cam_high", "cam_head", "head_camera", "top_camera"],
+        "cam_left_wrist": ["cam_left_wrist", "left_camera", "left_wrist", "wrist_left"],
+        "cam_right_wrist": ["cam_right_wrist", "right_camera", "right_wrist", "wrist_right"],
+    }
     images = {
-        "cam_high": ensure_chw_uint8(extract_image(observation, ["cam_high", "cam_head", "head_camera", "top_camera"])),
-        "cam_left_wrist": ensure_chw_uint8(
-            extract_image(observation, ["cam_left_wrist", "left_camera", "left_wrist", "wrist_left"])
-        ),
-        "cam_right_wrist": ensure_chw_uint8(
-            extract_image(observation, ["cam_right_wrist", "right_camera", "right_wrist", "wrist_right"])
-        ),
+        camera_name: ensure_chw_uint8(extract_image(observation, candidates[camera_name]))
+        for camera_name in _CAMERAS_BY_MODE[camera_mode]
     }
     state = pack_robot_state(observation, action_type, robot_action_dim_info, source_type="obs").astype(np.float32)
     prompt = observation.get("instruction")
@@ -187,12 +239,16 @@ def encode_obs(observation, action_type, robot_action_dim_info):
 
 
 def stack_obs(obs_list: list[dict[str, Any]]) -> dict[str, Any]:
+    if not obs_list:
+        raise ValueError("obs_list must not be empty")
+    camera_names = tuple(obs_list[0]["images"])
+    if any(tuple(obs["images"]) != camera_names for obs in obs_list[1:]):
+        raise ValueError("All observations in a batch must expose the same cameras")
     return {
         "state": np.stack([obs["state"] for obs in obs_list], axis=0),
         "images": {
-            "cam_high": np.stack([obs["images"]["cam_high"] for obs in obs_list], axis=0),
-            "cam_left_wrist": np.stack([obs["images"]["cam_left_wrist"] for obs in obs_list], axis=0),
-            "cam_right_wrist": np.stack([obs["images"]["cam_right_wrist"] for obs in obs_list], axis=0),
+            camera_name: np.stack([obs["images"][camera_name] for obs in obs_list], axis=0)
+            for camera_name in camera_names
         },
         "prompt": [obs["prompt"] for obs in obs_list],
     }
@@ -202,9 +258,8 @@ def slice_stacked_obs(obs: dict[str, Any], batch_index: int) -> dict[str, Any]:
     return {
         "state": obs["state"][batch_index],
         "images": {
-            "cam_high": obs["images"]["cam_high"][batch_index],
-            "cam_left_wrist": obs["images"]["cam_left_wrist"][batch_index],
-            "cam_right_wrist": obs["images"]["cam_right_wrist"][batch_index],
+            camera_name: image_batch[batch_index]
+            for camera_name, image_batch in obs["images"].items()
         },
         "prompt": obs["prompt"][batch_index],
     }

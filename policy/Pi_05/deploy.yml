@@ -18,5 +18,8 @@ policy_uv_env_path: openpi
 # Must match the config used by train.sh (default OPENPI_TRAIN_CONFIG_NAME).
 train_config_name: pi05_base_aloha_full_sim_arx-x5_seed_0
 repo_id: arx_x5_sim
+camera_mode: three_view
+paired_inference_noise: false
+inference_seed: 0
 
 port: 6000

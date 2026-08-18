@@ -12,6 +12,9 @@ policy_gpu_id=$7
 policy_uv_env=${8:-uv}
 policy_server_port=$9
 policy_server_host=${10:-"localhost"}
+camera_mode=${11:-"three_view"}
+paired_inference_noise=${12:-"False"}
+inference_seed=${13:-0}
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 XPL_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
@@ -89,4 +92,7 @@ exec env \
             seed="${seed}" \
             policy_name="${policy_name}" \
             action_type="${action_type}" \
-            action_dim="${action_dim}"
+            action_dim="${action_dim}" \
+            camera_mode="${camera_mode}" \
+            paired_inference_noise="${paired_inference_noise}" \
+            inference_seed="${inference_seed}"

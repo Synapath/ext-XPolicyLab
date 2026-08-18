@@ -12,6 +12,9 @@ policy_gpu_id=$7
 env_gpu_id=$8
 policy_uv_env=${9:-uv}
 eval_env_conda_env=${10}
+camera_mode=${11:-"three_view"}
+paired_inference_noise=${12:-"False"}
+inference_seed=${13:-0}
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)" # Current Dir
 XPL_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
@@ -45,7 +48,10 @@ setsid bash "${SERVER_SCRIPT}" \
     "${policy_gpu_id}" \
     "${policy_uv_env}" \
     "${policy_server_port}" \
-    "${policy_server_ip}" &
+    "${policy_server_ip}" \
+    "${camera_mode}" \
+    "${paired_inference_noise}" \
+    "${inference_seed}" &
 
 SERVER_PID=$!
 
