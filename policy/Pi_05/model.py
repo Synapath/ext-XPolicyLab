@@ -195,6 +195,11 @@ class Model(ModelTemplate):
             "camera_mode": self.camera_mode,
             "paired_inference_noise": self.paired_inference_noise,
             "inference_seed": self.inference_seed,
+            "paired_noise_seed": (
+                _paired_noise_seed(self.inference_seed, self._case_meta, self.action_type, 0)
+                if self.paired_inference_noise
+                else None
+            ),
         }
 
     def _next_noise(self, env_idx: int) -> np.ndarray:

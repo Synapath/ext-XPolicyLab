@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from XPolicyLab.policy.Pi_05.model import _paired_noise_seed, encode_obs, slice_stacked_obs, stack_obs
+from XPolicyLab.policy.Pi_05.model import Model, _paired_noise_seed, encode_obs, slice_stacked_obs, stack_obs
 
 
 def _observation() -> dict:
@@ -52,3 +52,21 @@ def test_paired_noise_seed_depends_on_case_but_not_camera_condition() -> None:
 
     assert head_seed == three_view_seed
     assert head_seed != next_case_seed
+
+
+def test_prepare_case_reports_the_effective_camera_and_noise_contract() -> None:
+    model = object.__new__(Model)
+    model.camera_mode = "head_only"
+    model.paired_inference_noise = True
+    model.inference_seed = 7
+    model.action_type = "joint"
+    case = {"task_name": "press_stapler", "seed": 920001, "action_type": "joint"}
+
+    result = model.prepare_case(case)
+
+    assert result == {
+        "camera_mode": "head_only",
+        "paired_inference_noise": True,
+        "inference_seed": 7,
+        "paired_noise_seed": _paired_noise_seed(7, case, "joint", 0),
+    }
