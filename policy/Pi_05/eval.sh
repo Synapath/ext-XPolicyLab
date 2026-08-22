@@ -23,7 +23,16 @@ CLIENT_SCRIPT="${SCRIPT_DIR}/setup_eval_env_client.sh"
 policy_server_port=$(bash "${UTILS_DIR}/get_free_port.sh")
 policy_server_ip="localhost"
 
-additional_info="ckpt_name=${ckpt_name},action_type=${action_type}"
+pi05_execution_horizon="${PI05_EXECUTION_HORIZON:-50}"
+case "${pi05_execution_horizon}" in
+    20|50) ;;
+    *)
+        echo "[ERROR] PI05_EXECUTION_HORIZON must be 20 or 50, got ${pi05_execution_horizon}" >&2
+        exit 2
+        ;;
+esac
+export PI05_EXECUTION_HORIZON="${pi05_execution_horizon}"
+additional_info="ckpt_name=${ckpt_name},action_type=${action_type},prediction_horizon=50,execution_horizon=${PI05_EXECUTION_HORIZON}"
 
 cleanup() {
     if [[ -n "${SERVER_PID:-}" ]]; then

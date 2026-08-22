@@ -69,5 +69,6 @@ Environment variables used by the adapter scripts:
 | `OPENPI_TRAIN_CONFIG_NAME` | Overrides the training config; defaults to `pi05_base_aloha_full_sim_arx-x5_seed_0`. |
 | `OPENPI_DATA_MODE` | Data-processing mode passed to `openpi/scripts/process_data.py`; defaults to `image`. |
 | `OPENPI_LOCAL_CACHE_ROOT` | Per-host local cache root for the HF datasets / JAX compilation caches; defaults to `/tmp/openpi-cache-$(hostname)`. |
+| `PI05_EXECUTION_HORIZON` | Number of actions executed before synchronous replanning. G6 accepts only `50` (Full-H50, default) or `20` (Sync20); prediction remains exactly H50 in both lanes. |
 
 `OPENPI_ROOT` and `OPENPI_SRC` are additional overrides consumed by the local scripts.
