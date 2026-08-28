@@ -89,6 +89,7 @@ def _resolve_pi05_model_root(model_cfg: dict[str, Any]) -> Path:
 class Model(ModelTemplate):
     def __init__(self, model_cfg: dict[str, Any]):
         self.task_name = model_cfg["task_name"]
+        self.strict_g2_arx = model_cfg.get("train_config_name") == "pi05_g2_rbdj_three_task_s0_strict"
         self.action_type = model_cfg.get("action_type", "joint")
         self.robot_action_dim_info = (
             get_robot_action_dim_info(model_cfg["env_cfg_type"]) if model_cfg.get("env_cfg_type") is not None else None
@@ -136,6 +137,10 @@ class Model(ModelTemplate):
         for batch_index, _ in enumerate(env_idx_list):
             single_observation = slice_stacked_obs(self.observation_window, batch_index)
             actions = self.policy.infer(single_observation, **kwargs)["actions"]
+            if self.strict_g2_arx:
+                from .deploy import validate_arx_prediction
+
+                actions = validate_arx_prediction(actions)
             if self.robot_action_dim_info is None:
                 action_list.append(actions)
             else:

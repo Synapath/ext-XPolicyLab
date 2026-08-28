@@ -2,7 +2,7 @@ import os
 
 
 PREDICTION_HORIZON = 50
-ALLOWED_EXECUTION_HORIZONS = frozenset({20, 50})
+ALLOWED_EXECUTION_HORIZONS = frozenset({16, 20, 50})
 
 
 def _execution_horizon():
@@ -24,6 +24,16 @@ def _validate_action_chunk(actions):
         raise ValueError(
             f"Pi_05 must predict exactly H{PREDICTION_HORIZON}, got action chunk length {chunk_size}"
         )
+
+
+def validate_arx_prediction(actions):
+    """G2 wire boundary before unpacking into native left/right arm dictionaries."""
+    import numpy as np
+
+    actions = np.asarray(actions)
+    if actions.shape != (50, 14) or not np.isfinite(actions).all():
+        raise ValueError(f"G2 requires finite [50,14] ARX actions, got {actions.shape}")
+    return actions
 
 
 def eval_one_episode(TASK_ENV, model_client):

@@ -84,6 +84,53 @@ class DeployControllerTest(unittest.TestCase):
         self.assertEqual(len(get_action_calls), 5)
         self.assertEqual(len(update_obs_calls), 100)
 
+    def test_sync16_preserves_prefix_and_termination(self):
+        env, calls, observations = self._run(16)
+        self.assertEqual(env.actions, list(range(16)) * 6 + list(range(4)))
+        self.assertEqual(len(calls), 7)
+        self.assertEqual(len(observations), 100)
+        self.assertEqual([x[1]["obs"]["step"] for x in observations], list(range(100)))
+
+    def test_sync16_batch_removes_finished_environment(self):
+        class UnevenEnv:
+            def __init__(self):
+                self.actions = {0: [], 1: []}
+
+            def is_episode_end(self):
+                return not self.get_running_env_idx_list()
+
+            def get_running_env_idx_list(self):
+                return [i for i, stop in ((0, 5), (1, 35)) if len(self.actions[i]) < stop]
+
+            def get_obs_batch(self, ids):
+                return [{"env": i, "step": len(self.actions[i])} for i in ids]
+
+            def take_action_batch(self, actions, ids):
+                for i, a in zip(ids, actions):
+                    self.actions[i].append(a)
+
+        env, client = UnevenEnv(), FakeClient()
+        with mock.patch.dict(os.environ, {"PI05_EXECUTION_HORIZON": "16"}):
+            deploy.eval_one_episode_batch(env, client)
+        self.assertEqual(env.actions[0], list(range(5)))
+        self.assertEqual(env.actions[1], list(range(16)) * 2 + list(range(3)))
+        requests = [x[1]["obs"] for x in client.calls if x[0] == "get_action_batch"]
+        self.assertEqual(requests, [[0, 1], [1], [1]])
+
+    def test_sync16_wire_sequence_is_deterministic(self):
+        first = self._run(16)
+        second = self._run(16)
+        self.assertEqual(first[0].actions, second[0].actions)
+        self.assertEqual(first[1:], second[1:])
+
+    def test_arx_shape_and_finite_boundary(self):
+        import numpy as np
+
+        self.assertEqual(deploy.validate_arx_prediction(np.zeros((50, 14))).shape, (50, 14))
+        for bad in (np.zeros((16, 14)), np.zeros((50, 32)), np.full((50, 14), np.nan)):
+            with self.assertRaisesRegex(ValueError, "finite"):
+                deploy.validate_arx_prediction(bad)
+
     def test_batch_sync20_replans_after_twenty_actions(self):
         env = FakeBatchEnv(episode_steps=100)
         client = FakeClient()

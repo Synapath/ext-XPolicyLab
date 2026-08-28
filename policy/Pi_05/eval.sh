@@ -25,9 +25,9 @@ policy_server_ip="localhost"
 
 pi05_execution_horizon="${PI05_EXECUTION_HORIZON:-50}"
 case "${pi05_execution_horizon}" in
-    20|50) ;;
+    16|20|50) ;;
     *)
-        echo "[ERROR] PI05_EXECUTION_HORIZON must be 20 or 50, got ${pi05_execution_horizon}" >&2
+        echo "[ERROR] PI05_EXECUTION_HORIZON must be 16, 20 or 50, got ${pi05_execution_horizon}" >&2
         exit 2
         ;;
 esac
