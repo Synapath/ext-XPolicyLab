@@ -1,18 +1,16 @@
 from __future__ import annotations
 
 import importlib.util
-import json
 import sys
-from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 import numpy as np
 
 from XPolicyLab.model_template import ModelTemplate
 from XPolicyLab.utils.checkpoint_resolver import resolve_checkpoint_root
 
-from .runtime import is_direct_checkpoint, seed_inference
+from .runtime import is_direct_checkpoint, processor_checkpoint_view, seed_inference
 
 _POLICY_DIR = Path(__file__).resolve().parent
 _GR00T_ROOT = _POLICY_DIR / "gr00t_n17"
@@ -89,38 +87,6 @@ def _resolve_cosmos_model(model_cfg: dict[str, Any]) -> str:
         return raw
 
     return str(_resolve_relative_path(raw, _POLICY_DIR))
-
-
-@contextmanager
-def _override_processor_cosmos_model(checkpoint_dir: Path, cosmos_model: str) -> Iterator[None]:
-    """Replace baked-in absolute Cosmos paths in processor_config.json during load."""
-    config_path = checkpoint_dir / "processor_config.json"
-    if not config_path.is_file():
-        yield
-        return
-
-    with open(config_path, encoding="utf-8") as f:
-        data = json.load(f)
-
-    processor_kwargs = data.setdefault("processor_kwargs", {})
-    previous = processor_kwargs.get("model_name")
-    if previous == cosmos_model:
-        yield
-        return
-
-    processor_kwargs["model_name"] = cosmos_model
-    with open(config_path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
-
-    try:
-        yield
-    finally:
-        if previous is not None:
-            processor_kwargs["model_name"] = previous
-        else:
-            processor_kwargs.pop("model_name", None)
-        with open(config_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2)
 
 
 def _resolve_checkpoint_dir(model_cfg: dict[str, Any]) -> Path:
@@ -327,9 +293,9 @@ class Model(ModelTemplate):
         embodiment_tag = model_cfg.get("embodiment_tag", "NEW_EMBODIMENT")
         cosmos_model = _resolve_cosmos_model(model_cfg)
 
-        with _override_processor_cosmos_model(checkpoint_dir, cosmos_model):
+        with processor_checkpoint_view(checkpoint_dir, cosmos_model) as checkpoint_view:
             self.policy = Gr00tPolicy(
-                model_path=str(checkpoint_dir),
+                model_path=str(checkpoint_view),
                 embodiment_tag=embodiment_tag,
                 device=self.device,
                 strict=True,

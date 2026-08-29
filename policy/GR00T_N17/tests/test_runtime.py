@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import random
 from pathlib import Path
 import tempfile
@@ -7,7 +8,11 @@ import unittest
 
 import numpy as np
 
-from policy.GR00T_N17.runtime import is_direct_checkpoint, seed_inference
+from policy.GR00T_N17.runtime import (
+    is_direct_checkpoint,
+    processor_checkpoint_view,
+    seed_inference,
+)
 
 
 class RuntimeTest(unittest.TestCase):
@@ -30,6 +35,28 @@ class RuntimeTest(unittest.TestCase):
         seed_inference(17)
         second = (random.random(), np.random.random())
         self.assertEqual(first, second)
+
+    def test_processor_view_does_not_mutate_checkpoint(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            original = {
+                "processor_kwargs": {"model_name": "/old/cosmos"},
+                "other": "preserved",
+            }
+            config = root / "processor_config.json"
+            config.write_text(json.dumps(original), encoding="utf-8")
+            weights = root / "model.safetensors.index.json"
+            weights.write_text("{}\n", encoding="utf-8")
+            before = config.read_bytes()
+            with processor_checkpoint_view(root, "/new/cosmos") as view:
+                self.assertNotEqual(view, root)
+                payload = json.loads(
+                    (view / "processor_config.json").read_text(encoding="utf-8")
+                )
+                self.assertEqual(payload["processor_kwargs"]["model_name"], "/new/cosmos")
+                self.assertEqual((view / weights.name).resolve(), weights.resolve())
+                self.assertEqual(config.read_bytes(), before)
+            self.assertEqual(config.read_bytes(), before)
 
 
 if __name__ == "__main__":
