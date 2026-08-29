@@ -20,7 +20,17 @@ protocol_override="${14:-}"
 source "${UTILS_DIR}/resolve_eval_env_type.sh"
 eval_env_mode="$(resolve_eval_env_type)" || exit 1
 
-read eval_batch yaml_protocol < <(python - <<PY
+config_python="python"
+if [[ "${eval_env_conda_env}" == */* ]]; then
+    eval_env_path="$(realpath "${eval_env_conda_env}")"
+    if [[ ! -x "${eval_env_path}/bin/python" ]]; then
+        echo "[CLIENT] Python not found in direct virtual environment: ${eval_env_path}" >&2
+        exit 1
+    fi
+    config_python="${eval_env_path}/bin/python"
+fi
+
+read eval_batch yaml_protocol < <("${config_python}" - <<PY
 import yaml
 with open("${yaml_file}", "r") as f:
     data = yaml.safe_load(f)
