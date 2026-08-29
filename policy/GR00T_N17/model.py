@@ -12,6 +12,8 @@ import numpy as np
 from XPolicyLab.model_template import ModelTemplate
 from XPolicyLab.utils.checkpoint_resolver import resolve_checkpoint_root
 
+from .runtime import is_direct_checkpoint, seed_inference
+
 _POLICY_DIR = Path(__file__).resolve().parent
 _GR00T_ROOT = _POLICY_DIR / "gr00t_n17"
 _CHECKPOINTS_DIR = _POLICY_DIR / "checkpoints"
@@ -132,6 +134,11 @@ def _resolve_checkpoint_dir(model_cfg: dict[str, Any]) -> Path:
     )
     if not root.is_dir():
         raise FileNotFoundError(f"Checkpoint root not found: {root}")
+
+    # Evaluation protocols commonly identify one exact checkpoint directory
+    # rather than a training-run root containing several checkpoint-* children.
+    if is_direct_checkpoint(root):
+        return root.resolve()
 
     search_roots = [root]
     for child in sorted(root.iterdir()):
@@ -313,6 +320,7 @@ class Model(ModelTemplate):
         self.default_prompt = model_cfg.get("default_prompt", model_cfg.get("task_name", "Perform the robot manipulation task."))
         self.env_cfg_type = model_cfg["env_cfg_type"]
         self.device = model_cfg.get("device", "cuda:0" if self._has_cuda() else "cpu")
+        self.inference_seed = int(model_cfg.get("seed", 0))
 
         _load_modality_config(self.env_cfg_type)
         checkpoint_dir = _resolve_checkpoint_dir(model_cfg)
@@ -371,3 +379,4 @@ class Model(ModelTemplate):
         self._obs_list = []
         self._latest_env_idx_list = [0]
         self.policy.reset()
+        seed_inference(self.inference_seed)
