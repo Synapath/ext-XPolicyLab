@@ -49,8 +49,13 @@ PYENV
 
 if [[ "${policy_conda_env}" == "uv" || "${policy_conda_env}" == */* ]]; then
     policy_uv_env_path="$(resolve_uv_env "${policy_conda_env}")"
-    PYTHON_BIN="${policy_uv_env_path}/.venv/bin/python"
-    echo "[SERVER] Using uv environment: ${policy_uv_env_path}"
+    if [[ -x "${policy_uv_env_path}/bin/python" ]]; then
+        PYTHON_BIN="${policy_uv_env_path}/bin/python"
+        echo "[SERVER] Using direct virtual environment: ${policy_uv_env_path}"
+    else
+        PYTHON_BIN="${policy_uv_env_path}/.venv/bin/python"
+        echo "[SERVER] Using uv project environment: ${policy_uv_env_path}"
+    fi
 else
     source "$(conda info --base)/etc/profile.d/conda.sh"
     echo "[SERVER] Activating Conda environment: ${policy_conda_env}"

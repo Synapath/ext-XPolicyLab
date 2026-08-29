@@ -15,11 +15,21 @@ env_gpu_id="${11}"
 policy_server_ip="${12:-localhost}"
 protocol="${13:-ws}"
 
-source "$(conda info --base)/etc/profile.d/conda.sh"
-conda deactivate || true
-conda activate "${eval_env_conda_env}"
-
-echo -e "\033[34m[CLIENT] Activating Conda environment: ${eval_env_conda_env}\033[0m"
+if [[ "${eval_env_conda_env}" == */* ]]; then
+  eval_env_path="$(realpath "${eval_env_conda_env}")"
+  if [[ ! -x "${eval_env_path}/bin/python" ]]; then
+    echo "[CLIENT] Python not found in direct virtual environment: ${eval_env_path}" >&2
+    exit 1
+  fi
+  export VIRTUAL_ENV="${eval_env_path}"
+  export PATH="${eval_env_path}/bin:${PATH}"
+  echo -e "\033[34m[CLIENT] Using direct virtual environment: ${eval_env_path}\033[0m"
+else
+  source "$(conda info --base)/etc/profile.d/conda.sh"
+  conda deactivate || true
+  conda activate "${eval_env_conda_env}"
+  echo -e "\033[34m[CLIENT] Activating Conda environment: ${eval_env_conda_env}\033[0m"
+fi
 echo -e "\033[34m[CLIENT] Connecting to server ${policy_server_ip}:${policy_server_port}...\033[0m"
 echo -e "\033[34m[CLIENT] Watch for green [CONNECTED]; yellow [RECONNECT] means the client is retrying.\033[0m"
 
