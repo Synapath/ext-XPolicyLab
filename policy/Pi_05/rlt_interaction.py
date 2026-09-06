@@ -68,8 +68,14 @@ def run_episode(env, client):
     if protocol["schema"] != "charger-rlt-interaction-v1" or env.num_envs != 1:
         raise ValueError("RLT interaction protocol/single environment required")
     actor_enabled = protocol["actor_enabled"]
-    if actor_enabled and not protocol.get("gate_calibration_id"):
-        raise ValueError("actor execution requires independent gate calibration")
+    if actor_enabled:
+        from manip_rlt.calibration import verify_entry_receipt
+
+        verified = verify_entry_receipt(
+            protocol["gate_calibration_path"], protocol["gate_calibration_id"], protocol["gate_config"]
+        )
+        if verified["identity"] != protocol["gate_calibration_id"]:
+            raise ValueError("actor execution requires verified independent entry review")
     if int(os.environ.get("PI05_EXECUTION_HORIZON", "0")) != 10:
         raise ValueError("RLT requires E10")
     client.call(func_name="reset")
