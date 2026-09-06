@@ -87,6 +87,7 @@ def run_episode(env, client):
     )
     result = driver.run(episode, trace=trace)
     summary = {k: v for k, v in result.items() if k != "transitions"}
+    client.call(func_name="rlt_episode_end", obs={**summary, "episode_id": episode})
     summary.update(
         schema="charger-rlt-summary-v1",
         experiment_name=protocol["experiment_name"],
