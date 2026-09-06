@@ -1,4 +1,9 @@
 def eval_one_episode(TASK_ENV, model_client):
+    import os
+    if os.environ.get("ROBODOJO_RLT_INTERACTION") == "1":
+        from .rlt_interaction import run_episode
+        return run_episode(TASK_ENV, model_client)
+
 
     model_client.call(func_name="reset") # reset policy
 
@@ -17,6 +22,11 @@ def eval_one_episode(TASK_ENV, model_client):
             model_client.call(func_name="update_obs", obs=obs)
 
 def eval_one_episode_batch(TASK_ENV, model_client):
+    import os
+    if os.environ.get("ROBODOJO_RLT_INTERACTION") == "1":
+        from .rlt_interaction import run_episode
+        return run_episode(TASK_ENV, model_client)
+
 
     model_client.call(func_name="reset")
 
