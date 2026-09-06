@@ -72,7 +72,8 @@ def run_episode(env, client):
         from manip_rlt.calibration import verify_entry_receipt
 
         verified = verify_entry_receipt(
-            protocol["gate_calibration_path"], protocol["gate_calibration_id"], protocol["gate_config"]
+            protocol["gate_calibration_path"], protocol["gate_calibration_id"], protocol["gate_config"],
+            context=protocol["calibration_context"],
         )
         if verified["identity"] != protocol["gate_calibration_id"]:
             raise ValueError("actor execution requires verified independent entry review")
