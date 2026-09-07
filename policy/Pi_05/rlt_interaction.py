@@ -83,7 +83,10 @@ def run_episode(env, client):
     codec = ActionCodec(protocol["q01"], protocol["q99"], protocol["norm_id"])
     gate = ContactGate(protocol["gate_config"], calibration_id=protocol.get("gate_calibration_id"))
     episode = f"{env.run_id}-s{env.eval_seed}-l{env.env_seeds[0]}"
-    trace = TraceStore(Path(env.save_dir) / ("rlt-" + episode))
+    record_images = os.environ.get(
+        "ROBODOJO_RLT_RECORD_IMAGES", "1" if protocol.get("record_images", True) else "0"
+    ) == "1"
+    trace = TraceStore(Path(env.save_dir) / ("rlt-" + episode), record_images=record_images)
     driver = Driver(
         DojoEnvironment(env),
         RemoteProvider(client),
