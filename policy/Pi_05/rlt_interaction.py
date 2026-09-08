@@ -87,6 +87,10 @@ def run_episode(env, client):
         "ROBODOJO_RLT_RECORD_IMAGES", "1" if protocol.get("record_images", True) else "0"
     ) == "1"
     trace = TraceStore(Path(env.save_dir) / ("rlt-" + episode), record_images=record_images)
+    oracle = None
+    if protocol.get("oracle"):
+        from utils.charger_oracle import ChargerOracle
+        oracle = ChargerOracle(env, protocol["oracle"])
     driver = Driver(
         DojoEnvironment(env),
         RemoteProvider(client),
@@ -94,6 +98,7 @@ def run_episode(env, client):
         gate,
         RemoteActor(client) if actor_enabled else None,
         RemoteSink(client),
+        oracle=oracle,
     )
     result = driver.run(episode, trace=trace)
     summary = {k: v for k, v in result.items() if k != "transitions"}
