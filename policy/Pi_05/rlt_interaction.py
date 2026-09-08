@@ -88,9 +88,11 @@ def run_episode(env, client):
     ) == "1"
     trace = TraceStore(Path(env.save_dir) / ("rlt-" + episode), record_images=record_images)
     oracle = None
-    if protocol.get("oracle"):
+    oracle_config = protocol.get("oracle")
+    autonomous_case = oracle_config and [int(env.eval_seed), int(env.env_seeds[0])] in oracle_config.get("autonomous_cases", [])
+    if oracle_config and not autonomous_case:
         from utils.charger_oracle import ChargerOracle
-        oracle = ChargerOracle(env, protocol["oracle"])
+        oracle = ChargerOracle(env, oracle_config)
     driver = Driver(
         DojoEnvironment(env),
         RemoteProvider(client),
@@ -102,6 +104,7 @@ def run_episode(env, client):
     )
     result = driver.run(episode, trace=trace)
     summary = {k: v for k, v in result.items() if k != "transitions"}
+    summary["oracle_allowed"] = bool(oracle_config and not autonomous_case)
     client.call(func_name="rlt_episode_end", obs={**summary, "episode_id": episode})
     summary.update(
         schema="charger-rlt-summary-v1",
