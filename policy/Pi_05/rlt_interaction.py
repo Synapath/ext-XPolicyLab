@@ -101,6 +101,7 @@ def run_episode(env, client):
         RemoteActor(client) if actor_enabled else None,
         RemoteSink(client),
         oracle=oracle,
+        handoff_mode=protocol.get("handoff_mode", "chunk-boundary"),
     )
     result = driver.run(episode, trace=trace)
     summary = {k: v for k, v in result.items() if k != "transitions"}
