@@ -79,6 +79,10 @@ def run_episode(env, client):
             raise ValueError("actor execution requires verified independent entry review")
     if int(os.environ.get("PI05_EXECUTION_HORIZON", "0")) != 10:
         raise ValueError("RLT requires E10")
+    if protocol.get("fixed_state"):
+        from manip_rlt.fixed_state import run_fixed_state
+
+        return run_fixed_state(env, client, protocol)
     client.call(func_name="reset")
     codec = ActionCodec(protocol["q01"], protocol["q99"], protocol["norm_id"])
     gate = ContactGate(protocol["gate_config"], calibration_id=protocol.get("gate_calibration_id"))
