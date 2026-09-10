@@ -34,9 +34,11 @@ class TrialPolicyServer(PolicyServer):
 
 
 class RltModel:
-    def __init__(self, policy, receipt_path, checkpoint_ref, *, horizon=32, seed=0):
+    def __init__(self, policy, receipt_path, checkpoint_ref, *, horizon=32, seed=0,
+                 instruction="Plug the charger into the power strip."):
         self.policy, self.receipt_path, self.checkpoint_ref = policy, Path(receipt_path), checkpoint_ref
         self.horizon, self.seed = horizon, seed
+        self.instruction = instruction
         self.sessions = {}
 
     def reset(self):
@@ -63,8 +65,8 @@ class RltModel:
             encoded = encode_obs(obs, "joint", _DIMENSIONS)
             if encoded["state"].shape != (14,) or not np.isfinite(encoded["state"]).all():
                 raise ValueError("expected finite ARX 14D state")
-            if encoded["prompt"] != "Plug the charger into the power strip.":
-                raise ValueError("charger prompt mismatch")
+            if encoded["prompt"] != self.instruction:
+                raise ValueError("task prompt mismatch")
             session["observations"][index] = encoded
             indices.append(index)
         session["indices"] = indices
