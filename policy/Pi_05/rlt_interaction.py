@@ -65,6 +65,9 @@ def run_episode(env, client):
     from manip_rlt.gate import ContactGate
 
     protocol = json.loads(Path(os.environ["ROBODOJO_RLT_PROTOCOL"]).read_text())
+    if protocol.get("schema") == "tubes-single-insertion-v1":
+        from manip_rlt.tubes_episode import run_episode as run_tubes
+        return run_tubes(env, client, protocol)
     if protocol["schema"] != "charger-rlt-interaction-v1" or env.num_envs != 1:
         raise ValueError("RLT interaction protocol/single environment required")
     actor_enabled = protocol["actor_enabled"]
